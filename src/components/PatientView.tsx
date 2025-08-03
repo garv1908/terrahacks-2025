@@ -1,8 +1,86 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FileText, Calendar, Clock, Pill, ArrowRight, Heart } from 'lucide-react';
+import { FileText, Calendar, Clock, Pill, ArrowRight, Heart, Loader } from 'lucide-react';
+import { apiService } from '../services/api';
+
+interface PatientData {
+  id: string;
+  patient_name: string;
+  doctor_name: string;
+  date: string;
+  duration: number;
+  transcription: string;
+  doctor_notes: any;
+  patient_summary: any;
+  status: string;
+}
 
 const PatientView: React.FC = () => {
+  const [patientData, setPatientData] = useState<PatientData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadLatestPatientRecord();
+  }, []);
+
+  const loadLatestPatientRecord = async () => {
+    try {
+      setLoading(true);
+      
+      // Try to load from backend first
+      try {
+        const response = await apiService.getAllRecordings();
+        if (response.status === 'success' && response.recordings.length > 0) {
+          // Get the most recent recording
+          const recordings = response.recordings.sort((a: any, b: any) => 
+            new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
+          setPatientData(recordings[0]);
+          return;
+        }
+      } catch (err) {
+        console.log('Backend not available, trying localStorage...');
+      }
+      
+      // Fallback to localStorage
+      const savedRecordings = localStorage.getItem('echonotes-recordings');
+      if (savedRecordings) {
+        const recordings = JSON.parse(savedRecordings);
+        if (recordings.length > 0) {
+          // Get the most recent recording and convert format
+          const sortedRecordings = recordings.sort((a: any, b: any) => 
+            new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
+          
+          const latestRecording = sortedRecordings[0];
+          
+          // Convert localStorage format to expected format
+          const convertedRecording = {
+            id: latestRecording.id,
+            patient_name: latestRecording.patientName,
+            doctor_name: latestRecording.doctorName,
+            date: latestRecording.date,
+            duration: latestRecording.duration,
+            transcription: latestRecording.transcription,
+            doctor_notes: latestRecording.doctorNotes,
+            patient_summary: latestRecording.patientSummary,
+            status: latestRecording.status
+          };
+          
+          setPatientData(convertedRecording);
+          return;
+        }
+      }
+      
+      setError('No patient records found');
+    } catch (err) {
+      console.error('Error loading patient record:', err);
+      setError('Failed to load patient record');
+    } finally {
+      setLoading(false);
+    }
+  };
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -17,29 +95,51 @@ const PatientView: React.FC = () => {
     hidden: { opacity: 0, y: 20 },
     visible: { opacity: 1, y: 0 }
   };
-  
-  // Mock data - in real app, this would be loaded based on sessionId
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+            className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full mx-auto mb-4"
+          />
+          <p className="text-gray-600">Loading your latest visit summary...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !patientData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">No Visit Records Found</h1>
+          <p className="text-gray-600 mb-6">{error || 'No patient visits have been recorded yet.'}</p>
+          <button
+            onClick={() => window.location.href = '/'}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-xl"
+          >
+            Go to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Extract patient summary data
   const patientSummary = {
-    patientName: 'John Doe',
-    doctorName: 'Dr. Smith',
-    date: new Date().toLocaleDateString(),
-    summary: `You visited today about headaches that have been bothering you for the past 3 weeks. The doctor examined you and found that these are likely tension headaches, possibly with some migraine features. Your physical exam was normal, which is reassuring.`,
-    keyPoints: [
-      'Your headaches appear to be tension-type with possible migraine features',
-      'Physical examination was completely normal',
-      'No concerning signs that require immediate attention'
-    ],
-    nextSteps: [
-      'Try stress management techniques like relaxation exercises',
-      'Take the prescribed medication as needed for severe headaches',
-      'Continue ibuprofen for regular pain relief',
-      'Follow up in 2 weeks if headaches continue'
-    ],
-    medications: [
-      { name: 'Sumatriptan', dosage: '50mg as needed', purpose: 'For severe headaches' },
-      { name: 'Ibuprofen', dosage: '400mg every 6 hours', purpose: 'For regular pain relief' }
-    ],
-    followUpDate: '2 weeks'
+    patientName: patientData.patient_name,
+    doctorName: patientData.doctor_name,
+    date: new Date(patientData.date).toLocaleDateString(),
+    summary: patientData.patient_summary?.summary || 'Visit summary not available',
+    keyPoints: patientData.patient_summary?.keyPoints || [],
+    nextSteps: patientData.patient_summary?.nextSteps || [],
+    medications: patientData.patient_summary?.medications || [],
+    followUpDate: patientData.doctor_notes?.followUp || 'As needed'
   };
 
   return (
@@ -142,10 +242,14 @@ const PatientView: React.FC = () => {
               {patientSummary.medications.map((med, index) => (
                 <div key={index} className="border-l-4 border-purple-200 pl-4">
                   <div className="flex items-center justify-between mb-1">
-                    <h3 className="font-semibold text-gray-900">{med.name}</h3>
-                    <span className="text-sm text-gray-500">{med.dosage}</span>
+                    <h3 className="font-semibold text-gray-900">{typeof med === 'string' ? med : med.name}</h3>
+                    {typeof med === 'object' && med.dosage && (
+                      <span className="text-sm text-gray-500">{med.dosage}</span>
+                    )}
                   </div>
-                  <p className="text-gray-600 text-sm">{med.purpose}</p>
+                  {typeof med === 'object' && med.purpose && (
+                    <p className="text-gray-600 text-sm">{med.purpose}</p>
+                  )}
                 </div>
               ))}
             </div>

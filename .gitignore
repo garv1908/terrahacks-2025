@@ -27,3 +27,5 @@ dist-ssr
 
 backend/venv
 backend/__pycache__
+
+presentation/
