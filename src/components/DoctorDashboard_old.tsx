@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, FileText, Clock, User, Calendar } from 'lucide-react';
+import { Plus, FileText, Clock, User, Calendar, ArrowUpRight } from 'lucide-react';
 import type { Recording } from '../types';
 
 const DoctorDashboard: React.FC = () => {
@@ -76,6 +76,7 @@ const DoctorDashboard: React.FC = () => {
             >
               <Plus className="w-5 h-5 mr-2" />
               New Session
+            </button>
             </motion.button>
           </div>
         </div>
@@ -181,7 +182,7 @@ const DoctorDashboard: React.FC = () => {
                 animate="visible"
                 className="divide-y divide-gray-200"
               >
-                {recordings.map((recording) => (
+                {recordings.map((recording, index) => (
                   <motion.li 
                     key={recording.id} 
                     variants={itemVariants}
@@ -224,6 +225,28 @@ const DoctorDashboard: React.FC = () => {
           )}
         </motion.div>
       </motion.div>
+                            {new Date(recording.date).toLocaleDateString()}
+                            <Clock className="w-4 h-4 ml-4 mr-1" />
+                            {formatDuration(recording.duration)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(recording.status)}`}>
+                          {recording.status}
+                        </span>
+                        <button className="text-medical-600 hover:text-medical-700 font-medium text-sm">
+                          View Details
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

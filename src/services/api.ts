@@ -62,6 +62,7 @@ class ApiService {
   }
 
   async healthCheck(): Promise<{ status: string; timestamp: string }> {
+    console.log('Performing health check on url: ', API_BASE_URL + "/health");
     const response = await this.api.get('/health');
     return response.data;
   }

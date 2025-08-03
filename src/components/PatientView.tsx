@@ -1,9 +1,22 @@
 import React from 'react';
-import { useParams } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { FileText, Calendar, Clock, Pill, ArrowRight, Heart } from 'lucide-react';
 
 const PatientView: React.FC = () => {
-  const { sessionId } = useParams<{ sessionId: string }>();
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0 }
+  };
   
   // Mock data - in real app, this would be loaded based on sessionId
   const patientSummary = {
@@ -30,61 +43,78 @@ const PatientView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-medical-50">
+    <motion.div 
+      className="min-h-screen bg-gray-50"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
       {/* Header */}
-      <div className="bg-white shadow-sm">
+      <motion.div 
+        className="bg-white shadow-sm"
+        variants={itemVariants}
+      >
         <div className="max-w-4xl mx-auto px-4 py-6">
           <div className="flex items-center">
-            <Heart className="w-8 h-8 text-primary-600 mr-3" />
+            <Heart className="w-8 h-8 text-blue-600 mr-3" />
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Your Visit Summary</h1>
               <p className="text-gray-600">Easy-to-understand summary of your consultation</p>
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Visit Info */}
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <motion.div 
+          className="bg-white rounded-xl shadow-sm p-6 mb-6"
+          variants={itemVariants}
+        >
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="flex items-center">
-              <Calendar className="w-5 h-5 text-primary-600 mr-2" />
+              <Calendar className="w-5 h-5 text-blue-600 mr-2" />
               <div>
                 <p className="text-sm text-gray-500">Visit Date</p>
                 <p className="font-medium">{patientSummary.date}</p>
               </div>
             </div>
             <div className="flex items-center">
-              <FileText className="w-5 h-5 text-medical-600 mr-2" />
+              <FileText className="w-5 h-5 text-green-600 mr-2" />
               <div>
                 <p className="text-sm text-gray-500">Doctor</p>
                 <p className="font-medium">{patientSummary.doctorName}</p>
               </div>
             </div>
             <div className="flex items-center">
-              <Clock className="w-5 h-5 text-green-600 mr-2" />
+              <Clock className="w-5 h-5 text-orange-600 mr-2" />
               <div>
                 <p className="text-sm text-gray-500">Follow-up</p>
                 <p className="font-medium">In {patientSummary.followUpDate}</p>
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Main Summary */}
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <motion.div 
+          className="bg-white rounded-xl shadow-sm p-6 mb-6"
+          variants={itemVariants}
+        >
           <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-            <FileText className="w-6 h-6 text-primary-600 mr-2" />
+            <FileText className="w-6 h-6 text-blue-600 mr-2" />
             What We Discussed
           </h2>
           <div className="prose prose-blue max-w-none">
             <p className="text-gray-700 leading-relaxed">{patientSummary.summary}</p>
           </div>
-        </div>
+        </motion.div>
 
         {/* Key Points */}
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <motion.div 
+          className="bg-white rounded-xl shadow-sm p-6 mb-6"
+          variants={itemVariants}
+        >
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Key Points</h2>
           <div className="space-y-3">
             {patientSummary.keyPoints.map((point, index) => (
@@ -96,18 +126,21 @@ const PatientView: React.FC = () => {
               </div>
             ))}
           </div>
-        </div>
+        </motion.div>
 
         {/* Medications */}
         {patientSummary.medications.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+          <motion.div 
+            className="bg-white rounded-xl shadow-sm p-6 mb-6"
+            variants={itemVariants}
+          >
             <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-              <Pill className="w-6 h-6 text-medical-600 mr-2" />
+              <Pill className="w-6 h-6 text-purple-600 mr-2" />
               Your Medications
             </h2>
             <div className="space-y-4">
               {patientSummary.medications.map((med, index) => (
-                <div key={index} className="border-l-4 border-medical-200 pl-4">
+                <div key={index} className="border-l-4 border-purple-200 pl-4">
                   <div className="flex items-center justify-between mb-1">
                     <h3 className="font-semibold text-gray-900">{med.name}</h3>
                     <span className="text-sm text-gray-500">{med.dosage}</span>
@@ -116,29 +149,35 @@ const PatientView: React.FC = () => {
                 </div>
               ))}
             </div>
-          </div>
+          </motion.div>
         )}
 
         {/* Next Steps */}
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <motion.div 
+          className="bg-white rounded-xl shadow-sm p-6 mb-6"
+          variants={itemVariants}
+        >
           <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-            <ArrowRight className="w-6 h-6 text-primary-600 mr-2" />
+            <ArrowRight className="w-6 h-6 text-blue-600 mr-2" />
             What to Do Next
           </h2>
           <div className="space-y-3">
             {patientSummary.nextSteps.map((step, index) => (
               <div key={index} className="flex items-start">
-                <div className="w-6 h-6 bg-primary-100 rounded-full flex items-center justify-center mr-3 mt-0.5 text-xs font-semibold text-primary-700">
+                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center mr-3 mt-0.5 text-xs font-semibold text-blue-700">
                   {index + 1}
                 </div>
                 <p className="text-gray-700">{step}</p>
               </div>
             ))}
           </div>
-        </div>
+        </motion.div>
 
         {/* Important Notice */}
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
+        <motion.div 
+          className="bg-amber-50 border border-amber-200 rounded-xl p-6"
+          variants={itemVariants}
+        >
           <h3 className="font-semibold text-amber-900 mb-2">Important Reminder</h3>
           <p className="text-amber-800 text-sm mb-3">
             This summary is meant to help you remember our conversation. It doesn't replace your medical records or professional medical advice.
@@ -151,16 +190,19 @@ const PatientView: React.FC = () => {
               <li>Vision changes or neurological symptoms</li>
             </ul>
           </div>
-        </div>
+        </motion.div>
 
         {/* Footer */}
-        <div className="text-center mt-8 pt-6 border-t border-gray-200">
+        <motion.div 
+          className="text-center mt-8 pt-6 border-t border-gray-200"
+          variants={itemVariants}
+        >
           <p className="text-gray-500 text-sm">
             Generated by EchoNotes • Privacy-first medical transcription
           </p>
-        </div>
+        </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

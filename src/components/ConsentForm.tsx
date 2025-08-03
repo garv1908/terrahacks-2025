@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserCheck, FileText, Shield, CheckCircle } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { UserCheck, FileText, Shield, CheckCircle, ArrowRight } from 'lucide-react';
 import type { ConsentData } from '../types';
 
 const ConsentForm: React.FC = () => {
@@ -32,17 +33,33 @@ const ConsentForm: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-medical-50 to-primary-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-medical-500 rounded-full mb-4">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+        className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 max-w-2xl w-full"
+      >
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          className="text-center mb-8"
+        >
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-6">
             <UserCheck className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Patient Consent</h1>
-          <p className="text-gray-600">Please review and provide consent for recording and AI processing</p>
-        </div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-3">Patient Consent</h1>
+          <p className="text-gray-600 text-lg">Please review and provide consent for recording and AI processing</p>
+        </motion.div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <motion.form 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.6, delay: 0.4 }}
+          onSubmit={handleSubmit} 
+          className="space-y-6"
+        >
           {/* Patient Information */}
           <div>
             <label htmlFor="patientName" className="block text-sm font-medium text-gray-700 mb-2">
@@ -135,23 +152,28 @@ const ConsentForm: React.FC = () => {
 
           {/* Action Buttons */}
           <div className="flex space-x-4">
-            <button
+            <motion.button
               type="button"
               onClick={() => navigate('/')}
               className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
               Cancel
-            </button>
-            <button
+            </motion.button>
+            <motion.button
               type="submit"
               disabled={!formData.patientName || !formData.recordingConsent}
-              className="flex-1 px-4 py-3 bg-medical-600 hover:bg-medical-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+              className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors duration-200 flex items-center justify-center"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
               Start Recording Session
-            </button>
+              <ArrowRight className="w-5 h-5 ml-2" />
+            </motion.button>
           </div>
-        </form>
-      </div>
+        </motion.form>
+      </motion.div>
     </div>
   );
 };
