@@ -1,7 +1,7 @@
 @echo off
-REM EchoNotes Backend Startup Script for Windows
+REM Echo Backend Startup Script for Windows
 
-echo 🩺 Starting EchoNotes Backend...
+echo 🩺 Starting Echo Backend...
 
 REM Check if Python is installed
 python --version >nul 2>&1

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# EchoNotes Backend Startup Script
+# Echo Backend Startup Script
 
 echo "Starting backend..."
 

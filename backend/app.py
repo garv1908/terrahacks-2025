@@ -156,82 +156,106 @@ def generate_notes():
         if not transcription:
             return jsonify({'error': 'No transcription provided'}), 400
         
-        # Prepare prompts for Ollama
-        doctor_prompt = f"""You are a medical AI assistant. Based on the following medical consultation transcription, generate a structured clinical note in SOAP format.
+        # Prepare single prompt for Ollama to generate both doctor and patient notes
+        combined_prompt = f"""Based on the medical consultation transcription below, generate BOTH clinical documentation and a patient summary.
 
-Transcription:
-{transcription}
+Transcription: {transcription}
 
-Please provide a JSON response with the following structure. Return ONLY valid JSON, no other text:
-
-{{
-  "subjective": "Patient's reported symptoms and concerns",
-  "objective": "Physical findings and observations", 
-  "assessment": "Medical diagnosis or impression",
-  "plan": "Treatment plan and follow-up instructions",
-  "medications": ["medication1", "medication2"],
-  "followUp": "Follow-up instructions"
-}}"""
-
-        patient_prompt = f"""Based on this medical consultation, create a simple, patient-friendly summary in plain language.
-
-Transcription:
-{transcription}
-
-Provide a JSON response with the following structure. Return ONLY valid JSON, no other text:
+Respond with ONLY a JSON object in this exact format (no explanatory text, no markdown, no code blocks):
 
 {{
-  "summary": "Brief summary of what was discussed in simple terms",
-  "keyPoints": ["key point 1", "key point 2", "key point 3"],
-  "nextSteps": ["step 1", "step 2", "step 3"],
-  "medications": ["medication 1 in plain language", "medication 2 in plain language"]
+  "doctorNotes": {{
+    "subjective": "Patient's reported symptoms and concerns",
+    "objective": "Physical findings and observations",
+    "assessment": "Medical diagnosis or impression", 
+    "plan": "Treatment plan and follow-up instructions",
+    "medications": ["medication1", "medication2"],
+    "followUp": "Follow-up instructions"
+  }},
+  "patientSummary": {{
+    "summary": "Brief summary of what was discussed in simple terms",
+    "keyPoints": ["key point 1", "key point 2", "key point 3"],
+    "nextSteps": ["step 1", "step 2", "step 3"],
+    "medications": ["medication 1 in plain language", "medication 2 in plain language"]
+  }}
 }}"""
+
         model = 'llama3.1:8b'  # Use the more reliable model  
-        # Call Ollama for doctor notes
-        doctor_result = subprocess.run([
+        
+        # Call Ollama for combined notes
+        result = subprocess.run([
             'curl', '-X', 'POST', 'http://localhost:11434/api/generate',
             '-H', 'Content-Type: application/json',
             '-d', json.dumps({
                 'model': model,
-                'prompt': doctor_prompt,
-                'stream': False
-            })
-        ], capture_output=True, text=True)
-        print(doctor_result.stdout)  # Debugging output 
-        
-        # Call Ollama for patient summary
-        patient_result = subprocess.run([
-            'curl', '-X', 'POST', 'http://localhost:11434/api/generate',
-            '-H', 'Content-Type: application/json',
-            '-d', json.dumps({
-                'model': model,
-                'prompt': patient_prompt,
+                'prompt': combined_prompt,
                 'stream': False
             })
         ], capture_output=True, text=True)
         
-        if doctor_result.returncode != 0 or patient_result.returncode != 0:
+        if result.returncode != 0:
             return jsonify({'error': 'Failed to generate notes with Ollama'}), 500
         
-        # Parse Ollama responses
-        print("Doctor result stdout:", doctor_result.stdout[:500])  # First 500 chars
-        print("Patient result stdout:", patient_result.stdout[:500])
+        # Parse Ollama response
+        print("Combined result stdout:", result.stdout[:500])  # First 500 chars
         
-        doctor_response = json.loads(doctor_result.stdout)
-        patient_response = json.loads(patient_result.stdout)
+        response = json.loads(result.stdout)
+        print("Raw response content:", response.get('response', '')[:300])
         
-        print("Doctor response content:", doctor_response.get('response', '')[:200])
-        print("Patient response content:", patient_response.get('response', '')[:200])
+        # Clean and parse the response
+        def clean_and_parse_response(response_text):
+            """Clean markdown artifacts and parse JSON from LLM response"""
+            try:
+                # First, remove any lines that contain ```
+                lines = response_text.split('\n')
+                cleaned_lines = [line for line in lines if '```' not in line]
+                cleaned_text = '\n'.join(cleaned_lines)
+                
+                # Try direct JSON parsing on cleaned text
+                try:
+                    return json.loads(cleaned_text)
+                except json.JSONDecodeError:
+                    pass
+                
+                # Look for JSON within the cleaned text (find first { to last })
+                start_idx = cleaned_text.find('{')
+                if start_idx != -1:
+                    # Find the matching closing brace
+                    brace_count = 0
+                    end_idx = start_idx
+                    for i, char in enumerate(cleaned_text[start_idx:], start_idx):
+                        if char == '{':
+                            brace_count += 1
+                        elif char == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                end_idx = i + 1
+                                break
+                    
+                    json_str = cleaned_text[start_idx:end_idx]
+                    return json.loads(json_str)
+                
+                raise json.JSONDecodeError("No valid JSON found", response_text, 0)
+                
+            except Exception as e:
+                print(f"Parsing error: {e}")
+                raise
         
-        # Extract generated text and parse JSON
         try:
-            doctor_notes = json.loads(doctor_response['response'])
-            patient_summary = json.loads(patient_response['response'])
-            print("✅ Successfully parsed JSON from LLM responses")
-        except json.JSONDecodeError as json_error:
-            print(f"❌ JSON decode error: {json_error}")
-            print(f"Raw doctor response: {doctor_response.get('response', 'No response')}")
-            print(f"Raw patient response: {patient_response.get('response', 'No response')}")
+            raw_response = response['response']
+            print(f"Parsing combined response: {raw_response[:100]}...")
+            
+            parsed_data = clean_and_parse_response(raw_response)
+            
+            doctor_notes = parsed_data.get('doctorNotes', {})
+            patient_summary = parsed_data.get('patientSummary', {})
+            
+            print("✅ Successfully parsed combined JSON from LLM response")
+            
+        except (json.JSONDecodeError, KeyError) as json_error:
+            print(f"❌ JSON parsing error: {json_error}")
+            print(f"Raw response: {response.get('response', 'No response')[:300]}")
+            
             # Fallback if LLM doesn't return valid JSON
             doctor_notes = {
                 'subjective': 'Patient reports symptoms as transcribed',

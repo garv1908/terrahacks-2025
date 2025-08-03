@@ -7,7 +7,7 @@ Currently, two official plugins are available:
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
 - [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-# 🩺 EchoNotes - AI-Generated Medical Notes Platform
+# 🩺 Echo - AI-Generated Medical Notes Platform
 
 A privacy-first web application that transcribes and summarizes doctor-patient conversations into structured clinical notes, featuring distinct doctor and patient views.
 

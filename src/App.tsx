@@ -30,7 +30,7 @@ function App() {
             <Stethoscope className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-3">
-            EchoNotes
+            Echo
           </h1>
           <p className="text-gray-600 text-lg">
             AI-powered medical transcription
