@@ -20,11 +20,25 @@ export const useAudioRecorder = () => {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
+          sampleRate: 44100,
+          channelCount: 1
         } 
       });
       
+      // Try different MIME types in order of preference for WAV compatibility
+      let mimeType = 'audio/webm;codecs=pcm';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm;codecs=opus';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = ''; // Use default
+      }
+      
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
+        mimeType: mimeType || undefined
       });
       
       mediaRecorderRef.current = mediaRecorder;
@@ -37,7 +51,9 @@ export const useAudioRecorder = () => {
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        // Create blob with the actual recorded format
+        const actualMimeType = mimeType || 'audio/webm';
+        const audioBlob = new Blob(chunksRef.current, { type: actualMimeType });
         setState(prev => ({ ...prev, audioBlob, isRecording: false }));
         
         // Stop all tracks

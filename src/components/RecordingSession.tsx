@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Mic, Square, Loader, FileText } from 'lucide-react';
 import type { Recording, AudioRecorderState } from '../types';
+import { apiService } from '../services/api';
 
 const RecordingSession: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -18,6 +19,7 @@ const RecordingSession: React.FC = () => {
   });
 
   const [processing, setProcessing] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
 
   useEffect(() => {
     // Check if consent exists
@@ -25,7 +27,19 @@ const RecordingSession: React.FC = () => {
     if (!consentData) {
       navigate('/consent');
     }
+
+    // Check backend status
+    checkBackendStatus();
   }, [sessionId, navigate]);
+
+  const checkBackendStatus = async () => {
+    try {
+      await apiService.healthCheck();
+      setBackendStatus('online');
+    } catch (error) {
+      setBackendStatus('offline');
+    }
+  };
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -89,13 +103,35 @@ const RecordingSession: React.FC = () => {
 
     try {
       // Get consent data
+      console.log('Fetching consent data...');
+      if (!localStorage.getItem(`consent-${sessionId}`)) {
+        console.log('No consent data found, stopping processing...');
+        return;
+      }
       const consentData = JSON.parse(localStorage.getItem(`consent-${sessionId}`) || '{}');
       
-      // Mock transcription and AI processing
-      // In a real app, this would call Whisper for transcription and Ollama for summarization
-      await new Promise(resolve => setTimeout(resolve, 3000)); // Simulate processing
+      let transcription: string;
+      let doctorNotes: any;
+      let patientSummary: any;
 
-      const mockTranscription = `Patient presents with chief complaint of persistent headaches lasting 3 weeks. Reports throbbing pain, primarily frontal and temporal regions. Pain rated 7/10, worse in mornings. Associated symptoms include mild nausea, occasional photophobia. No recent trauma, fever, or neurological deficits noted. Patient has been taking over-the-counter ibuprofen with minimal relief.
+      console.log('Processing recording...');
+      console.log('Consent Data:', consentData);
+      if (backendStatus === 'online') {
+        // Use real API
+        console.log('Transcribing audio...');
+        const transcriptionResponse = await apiService.transcribeAudio(recorderState.audioBlob);
+        transcription = transcriptionResponse.transcription;
+        
+        console.log('Generating clinical notes...');
+        const notesResponse = await apiService.generateNotes(transcription);
+        doctorNotes = notesResponse.doctorNotes;
+        patientSummary = notesResponse.patientSummary;
+      } else {
+        // Fallback to mock data
+        console.log('Using mock data (backend offline)');
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate processing
+        
+        transcription = `Patient presents with chief complaint of persistent headaches lasting 3 weeks. Reports throbbing pain, primarily frontal and temporal regions. Pain rated 7/10, worse in mornings. Associated symptoms include mild nausea, occasional photophobia. No recent trauma, fever, or neurological deficits noted. Patient has been taking over-the-counter ibuprofen with minimal relief.
 
 Physical examination reveals normal vital signs. Neurological examination within normal limits. No focal deficits observed. Fundoscopic examination unremarkable.
 
@@ -108,33 +144,32 @@ Plan:
 4. Follow up in 2 weeks if symptoms persist
 5. Return immediately if severe headache, fever, or neurological symptoms develop`;
 
-      const mockDoctorNotes = {
-        subjective: 'Patient reports persistent headaches for 3 weeks, throbbing pain rated 7/10, worse in mornings, associated with mild nausea and photophobia.',
-        objective: 'Vital signs stable. Neurological exam normal. No focal deficits. Fundoscopic exam unremarkable.',
-        assessment: 'Tension-type headaches with possible migraine features. No red flags for secondary headache.',
-        plan: 'Stress management, sumatriptan 50mg PRN, ibuprofen 400mg q6h PRN, f/u in 2 weeks.',
-        rawTranscription: mockTranscription,
-        medications: ['Sumatriptan 50mg PRN', 'Ibuprofen 400mg q6h PRN'],
-        followUp: '2 weeks'
-      };
+        doctorNotes = {
+          subjective: 'Patient reports persistent headaches for 3 weeks, throbbing pain rated 7/10, worse in mornings, associated with mild nausea and photophobia.',
+          objective: 'Vital signs stable. Neurological exam normal. No focal deficits. Fundoscopic exam unremarkable.',
+          assessment: 'Tension-type headaches with possible migraine features. No red flags for secondary headache.',
+          plan: 'Stress management, sumatriptan 50mg PRN, ibuprofen 400mg q6h PRN, f/u in 2 weeks.',
+          medications: ['Sumatriptan 50mg PRN', 'Ibuprofen 400mg q6h PRN'],
+          followUp: '2 weeks'
+        };
 
-      const mockPatientSummary = {
-        summary: `You visited today about headaches that have been bothering you for the past 3 weeks. The doctor examined you and found that these are likely tension headaches, possibly with some migraine features. Your physical exam was normal, which is reassuring.`,
-        keyPoints: [
-          'Your headaches appear to be tension-type with possible migraine features',
-          'Physical examination was completely normal',
-          'No concerning signs that require immediate attention'
-        ],
-        nextSteps: [
-          'Try stress management techniques like relaxation exercises',
-          'Take the prescribed medication as needed for severe headaches',
-          'Continue ibuprofen for regular pain relief',
-          'Follow up in 2 weeks if headaches continue'
-        ],
-        medications: ['Sumatriptan (for severe headaches)', 'Ibuprofen (for regular pain relief)'],
-        followUpDate: '2 weeks'
-      };
-
+        patientSummary = {
+          summary: `You visited today about headaches that have been bothering you for the past 3 weeks. The doctor examined you and found that these are likely tension headaches, possibly with some migraine features. Your physical exam was normal, which is reassuring.`,
+          keyPoints: [
+            'Your headaches appear to be tension-type with possible migraine features',
+            'Physical examination was completely normal',
+            'No concerning signs that require immediate attention'
+          ],
+          nextSteps: [
+            'Try stress management techniques like relaxation exercises',
+            'Take the prescribed medication as needed for severe headaches',
+            'Continue ibuprofen for regular pain relief',
+            'Follow up in 2 weeks if headaches continue'
+          ],
+          medications: ['Sumatriptan (for severe headaches)', 'Ibuprofen (for regular pain relief)']
+        };
+      }
+      
       const recording: Recording = {
         id: sessionId,
         patientName: consentData.patientName,
@@ -142,9 +177,12 @@ Plan:
         date: new Date(),
         duration: recorderState.duration,
         audioBlob: recorderState.audioBlob,
-        transcription: mockTranscription,
-        doctorNotes: mockDoctorNotes,
-        patientSummary: consentData.summaryConsent ? mockPatientSummary : undefined,
+        transcription: transcription,
+        doctorNotes: {
+          ...doctorNotes,
+          rawTranscription: transcription
+        },
+        patientSummary: consentData.summaryConsent ? patientSummary : undefined,
         status: 'completed',
         consentGiven: true
       };
@@ -158,9 +196,10 @@ Plan:
       navigate('/');
       
     } catch (error) {
+      console.error('Processing error:', error);
       setRecorderState(prev => ({ 
         ...prev, 
-        error: 'Failed to process recording. Please try again.' 
+        error: 'Failed to process recording. Please ensure the Flask backend is running and try again.' 
       }));
     } finally {
       setProcessing(false);
@@ -205,10 +244,38 @@ Plan:
           </div>
         )}
 
+        {backendStatus === 'offline' && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+            <p className="text-amber-800 text-sm">
+              <strong>Backend Offline:</strong> Flask server not detected. 
+              <br />
+              <span className="text-xs">Start the backend with: <code>cd backend && python app.py</code></span>
+            </p>
+          </div>
+        )}
+
+        {backendStatus === 'online' && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+            <p className="text-green-800 text-sm">
+              ✅ Backend connected - Whisper and Ollama ready
+            </p>
+          </div>
+        )}
+
         {processing && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
             <p className="text-blue-800 text-sm">
-              Processing audio with local AI models (Whisper + Ollama)...
+              {backendStatus === 'online' 
+                ? 'Processing audio with local AI models...'
+                : 'Processing with mock data (backend offline)...'
+              }
+              <br />
+              <span className="text-xs text-blue-600">
+                {backendStatus === 'online' 
+                  ? 'Step 1: Transcribing with Whisper → Step 2: Generating notes with Ollama'
+                  : 'Using demo transcription and AI-generated notes for demonstration'
+                }
+              </span>
             </p>
           </div>
         )}

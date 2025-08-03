@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export interface TranscriptionResponse {
   transcription: string;
@@ -17,6 +17,7 @@ export interface NotesResponse {
     objective: string;
     assessment: string;
     plan: string;
+    rawTranscription: string;
     medications: string[];
     followUp: string;
   };
@@ -31,12 +32,17 @@ export interface NotesResponse {
 class ApiService {
   private api = axios.create({
     baseURL: API_BASE_URL,
-    timeout: 30000, // 30 seconds for AI processing
+    timeout: 300000, // 30 seconds for AI processing
   });
 
   async transcribeAudio(audioBlob: Blob): Promise<TranscriptionResponse> {
     const formData = new FormData();
-    formData.append('audio', audioBlob, 'recording.wav');
+    
+    // Determine file extension based on blob type
+    const fileExtension = audioBlob.type.includes('webm') ? '.webm' : 
+                         audioBlob.type.includes('wav') ? '.wav' : '.webm';
+    
+    formData.append('audio', audioBlob, `recording${fileExtension}`);
 
     const response = await this.api.post<TranscriptionResponse>('/transcribe', formData, {
       headers: {

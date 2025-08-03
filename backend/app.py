@@ -5,9 +5,19 @@ import subprocess
 import tempfile
 import json
 from datetime import datetime
+import whisper
+import librosa
+import soundfile as sf
+import numpy as np
 
 app = Flask(__name__)
 CORS(app)
+
+# Load Whisper model once at startup
+print("Loading Whisper model...")
+whisper_model = whisper.load_model("base")
+# whisper_model = whisper.load_model("tiny")
+print("Whisper model loaded successfully")
 
 @app.route('/api/transcribe', methods=['POST'])
 def transcribe_audio():
@@ -18,39 +28,87 @@ def transcribe_audio():
         
         audio_file = request.files['audio']
         
-        # Save audio to temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_audio:
+        # Determine file extension from filename or default to webm
+        if audio_file.filename and '.' in audio_file.filename:
+            file_extension = os.path.splitext(audio_file.filename)[1]
+        else:
+            file_extension = '.webm'  # Default for browser recordings
+            
+        print(f"Received audio file: {audio_file.filename}, extension: {file_extension}")
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_audio:
             audio_file.save(temp_audio.name)
+            temp_file_path = temp_audio.name
             
-            # Run Whisper transcription
-            # Note: This requires whisper to be installed: pip install openai-whisper
-            result = subprocess.run([
-                'whisper', temp_audio.name, 
-                '--model', 'base', 
-                '--output_format', 'json',
-                '--output_dir', tempfile.gettempdir()
-            ], capture_output=True, text=True)
+        print(f"Saved audio to: {temp_file_path}")
+        
+        try:
+            # Run Whisper transcription using Python library
+            print(f"Running Whisper on: {temp_file_path}")
             
-            if result.returncode != 0:
-                return jsonify({'error': 'Transcription failed'}), 500
+            # Verify file exists before transcription
+            if not os.path.exists(temp_file_path):
+                raise FileNotFoundError(f"Audio file not found: {temp_file_path}")
             
-            # Read transcription result
-            base_name = os.path.splitext(os.path.basename(temp_audio.name))[0]
-            json_file = os.path.join(tempfile.gettempdir(), f"{base_name}.json")
+            # Load audio using librosa to ensure compatibility
+            try:
+                print("Loading audio with librosa...")
+                audio_data, sample_rate = librosa.load(temp_file_path, sr=16000)  # Whisper prefers 16kHz
+                print(f"Audio loaded: shape={audio_data.shape}, sr={sample_rate}")
+                
+                # Pass audio data directly to Whisper (no file needed)
+                print("Transcribing audio data with Whisper...")
+                result = whisper_model.transcribe(audio_data)
+                
+            except Exception as audio_error:
+                print(f"Audio processing error: {audio_error}")
+                # Fallback: try to create a simple WAV and use that
+                try:
+                    print("Creating simplified WAV file...")
+                    audio_data, sample_rate = librosa.load(temp_file_path, sr=16000)
+                    
+                    # Create a simple WAV file that Whisper might handle better
+                    simple_wav_path = temp_file_path.replace(file_extension, '_simple.wav')
+                    sf.write(simple_wav_path, audio_data, sample_rate, subtype='PCM_16')
+                    print(f"Simple WAV saved to: {simple_wav_path}")
+                    
+                    # Try transcribing the simplified WAV
+                    result = whisper_model.transcribe(simple_wav_path)
+                    
+                    # Clean up the simple WAV
+                    if os.path.exists(simple_wav_path):
+                        os.unlink(simple_wav_path)
+                        
+                except Exception as fallback_error:
+                    print(f"Fallback error: {fallback_error}")
+                    return jsonify({'error': f'Audio processing failed: {str(fallback_error)}'}), 500
             
-            with open(json_file, 'r') as f:
-                transcription_data = json.load(f)
+            transcription_text = result["text"].strip()
+            segments = result.get("segments", [])
             
-            # Cleanup
-            os.unlink(temp_audio.name)
-            os.unlink(json_file)
+            print(f"Transcription successful: {transcription_text[:100]}...")
             
             return jsonify({
-                'transcription': transcription_data['text'],
-                'segments': transcription_data.get('segments', [])
+                'transcription': transcription_text,
+                'segments': segments
             })
             
+        except Exception as whisper_error:
+            print(f"Whisper transcription error: {whisper_error}")
+            return jsonify({'error': f'Transcription failed: {str(whisper_error)}'}), 500
+        finally:
+            # Cleanup - ensure file is deleted even if error occurs
+            if os.path.exists(temp_file_path):
+                try:
+                    os.unlink(temp_file_path)
+                    print(f"Cleaned up temp file: {temp_file_path}")
+                except OSError as e:
+                    print(f"Failed to cleanup temp file: {e}")
+            
     except Exception as e:
+        print(f"Error in transcribe_audio: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/generate-notes', methods=['POST'])
@@ -94,24 +152,25 @@ Provide:
 Avoid medical jargon. Make it easy to understand for a general audience.
 Format as JSON with keys: summary, keyPoints (array), nextSteps (array), medications (array)
 """
-        
+        model = 'llama3.2'
         # Call Ollama for doctor notes
         doctor_result = subprocess.run([
             'curl', '-X', 'POST', 'http://localhost:11434/api/generate',
             '-H', 'Content-Type: application/json',
             '-d', json.dumps({
-                'model': 'llama3.2',  # or whatever model you have
+                'model': model,
                 'prompt': doctor_prompt,
                 'stream': False
             })
         ], capture_output=True, text=True)
+        print(doctor_result.stdout)  # Debugging output 
         
         # Call Ollama for patient summary
         patient_result = subprocess.run([
             'curl', '-X', 'POST', 'http://localhost:11434/api/generate',
             '-H', 'Content-Type: application/json',
             '-d', json.dumps({
-                'model': 'llama3.2',
+                'model': model,
                 'prompt': patient_prompt,
                 'stream': False
             })

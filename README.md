@@ -176,6 +176,30 @@ This is a hackathon project. Feel free to fork and improve!
 
 **Built for TerraHacks 2025** 🌍
 
+## 🤖 **API Integration Complete!**
+
+The RecordingSession component now makes real API calls to the Flask backend:
+
+- **✅ Automatic Backend Detection**: Checks if Flask server is running
+- **✅ Real AI Processing**: Uses Whisper + Ollama when available  
+- **✅ Graceful Fallback**: Mock data when backend offline
+- **✅ Status Indicators**: Visual feedback for backend connection
+
+### **Quick Start with Real AI:**
+
+```bash
+# Terminal 1: Frontend
+npm run dev
+
+# Terminal 2: Backend (Windows)
+start-backend.bat
+
+# Or Linux/Mac:
+./start-backend.sh
+```
+
+The app automatically switches from demo mode to real AI processing! 🚀
+
 You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
 ```js
