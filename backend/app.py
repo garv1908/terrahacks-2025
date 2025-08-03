@@ -11,7 +11,7 @@ import soundfile as sf
 import numpy as np
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins='*', allow_headers=['Content-Type', 'Authorization'], methods=['GET', 'POST', 'OPTIONS'])
 
 # Load Whisper model once at startup
 print("Loading Whisper model...")
@@ -50,43 +50,74 @@ def transcribe_audio():
             if not os.path.exists(temp_file_path):
                 raise FileNotFoundError(f"Audio file not found: {temp_file_path}")
             
-            # Load audio using librosa to ensure compatibility
+            # Try direct Whisper transcription first (simpler approach)
             try:
-                print("Loading audio with librosa...")
-                audio_data, sample_rate = librosa.load(temp_file_path, sr=16000)  # Whisper prefers 16kHz
-                print(f"Audio loaded: shape={audio_data.shape}, sr={sample_rate}")
+                print("Direct Whisper transcription...")
                 
-                # Pass audio data directly to Whisper (no file needed)
-                print("Transcribing audio data with Whisper...")
-                result = whisper_model.transcribe(audio_data)
+                # Check file size and content
+                file_size = os.path.getsize(temp_file_path)
+                print(f"Audio file size: {file_size} bytes")
                 
-            except Exception as audio_error:
-                print(f"Audio processing error: {audio_error}")
-                # Fallback: try to create a simple WAV and use that
+                if file_size == 0:
+                    raise ValueError("Audio file is empty")
+                
+                result = whisper_model.transcribe(temp_file_path)
+                
+            except Exception as whisper_error:
+                print(f"Direct Whisper error: {whisper_error}")
+                
+                # Use ffmpeg to convert to a format Whisper can definitely handle
                 try:
-                    print("Creating simplified WAV file...")
-                    audio_data, sample_rate = librosa.load(temp_file_path, sr=16000)
+                    print("Converting audio with ffmpeg...")
                     
-                    # Create a simple WAV file that Whisper might handle better
-                    simple_wav_path = temp_file_path.replace(file_extension, '_simple.wav')
-                    sf.write(simple_wav_path, audio_data, sample_rate, subtype='PCM_16')
-                    print(f"Simple WAV saved to: {simple_wav_path}")
+                    # Create output path for converted file
+                    converted_wav_path = temp_file_path.replace(file_extension, '_converted.wav')
                     
-                    # Try transcribing the simplified WAV
-                    result = whisper_model.transcribe(simple_wav_path)
+                    # Use ffmpeg to convert to 16kHz mono WAV
+                    ffmpeg_cmd = [
+                        'ffmpeg', '-y',  # -y to overwrite output file
+                        '-i', temp_file_path,  # input file
+                        '-ar', '16000',  # sample rate 16kHz
+                        '-ac', '1',      # mono audio
+                        '-c:a', 'pcm_s16le',  # 16-bit PCM encoding
+                        converted_wav_path
+                    ]
                     
-                    # Clean up the simple WAV
-                    if os.path.exists(simple_wav_path):
-                        os.unlink(simple_wav_path)
+                    print(f"Running ffmpeg command: {' '.join(ffmpeg_cmd)}")
+                    result_ffmpeg = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, check=True)
+                    
+                    print(f"ffmpeg conversion successful. Output: {converted_wav_path}")
+                    
+                    # Now try Whisper on the converted file
+                    if os.path.exists(converted_wav_path):
+                        converted_size = os.path.getsize(converted_wav_path)
+                        print(f"Converted file size: {converted_size} bytes")
                         
-                except Exception as fallback_error:
-                    print(f"Fallback error: {fallback_error}")
-                    return jsonify({'error': f'Audio processing failed: {str(fallback_error)}'}), 500
+                        result = whisper_model.transcribe(converted_wav_path)
+                        
+                        # Clean up converted file
+                        os.unlink(converted_wav_path)
+                        print(f"Cleaned up converted file: {converted_wav_path}")
+                    else:
+                        raise FileNotFoundError("Converted file was not created")
+                        
+                except subprocess.CalledProcessError as ffmpeg_error:
+                    print(f"ffmpeg error: {ffmpeg_error}")
+                    print(f"ffmpeg stderr: {ffmpeg_error.stderr}")
+                    return jsonify({
+                        'error': f'Audio conversion failed. Please check that your audio recording is valid.'
+                    }), 500
+                    
+                except Exception as conversion_error:
+                    print(f"Conversion error: {conversion_error}")
+                    return jsonify({
+                        'error': f'Unable to process audio file. Please try recording again with a different format.'
+                    }), 500
             
             transcription_text = result["text"].strip()
             segments = result.get("segments", [])
             
-            print(f"Transcription successful: {transcription_text[:100]}...")
+            print(f"Transcription successful: {transcription_text}...")
             
             return jsonify({
                 'transcription': transcription_text,
@@ -122,37 +153,36 @@ def generate_notes():
             return jsonify({'error': 'No transcription provided'}), 400
         
         # Prepare prompts for Ollama
-        doctor_prompt = f"""
-You are a medical AI assistant. Based on the following medical consultation transcription, generate a structured clinical note in SOAP format:
+        doctor_prompt = f"""You are a medical AI assistant. Based on the following medical consultation transcription, generate a structured clinical note in SOAP format.
 
 Transcription:
 {transcription}
 
-Please provide:
-1. Subjective: Patient's reported symptoms and concerns
-2. Objective: Physical findings and observations
-3. Assessment: Medical diagnosis or impression
-4. Plan: Treatment plan and follow-up instructions
+Please provide a JSON response with the following structure. Return ONLY valid JSON, no other text:
 
-Format as JSON with keys: subjective, objective, assessment, plan, medications (array), followUp
-"""
+{{
+  "subjective": "Patient's reported symptoms and concerns",
+  "objective": "Physical findings and observations", 
+  "assessment": "Medical diagnosis or impression",
+  "plan": "Treatment plan and follow-up instructions",
+  "medications": ["medication1", "medication2"],
+  "followUp": "Follow-up instructions"
+}}"""
 
-        patient_prompt = f"""
-Based on this medical consultation, create a simple, patient-friendly summary in plain language:
+        patient_prompt = f"""Based on this medical consultation, create a simple, patient-friendly summary in plain language.
 
 Transcription:
 {transcription}
 
-Provide:
-1. A brief summary of what was discussed
-2. Key points the patient should remember
-3. Next steps in simple terms
-4. Any medications in plain language
+Provide a JSON response with the following structure. Return ONLY valid JSON, no other text:
 
-Avoid medical jargon. Make it easy to understand for a general audience.
-Format as JSON with keys: summary, keyPoints (array), nextSteps (array), medications (array)
-"""
-        model = 'llama3.2'
+{{
+  "summary": "Brief summary of what was discussed in simple terms",
+  "keyPoints": ["key point 1", "key point 2", "key point 3"],
+  "nextSteps": ["step 1", "step 2", "step 3"],
+  "medications": ["medication 1 in plain language", "medication 2 in plain language"]
+}}"""
+        model = 'llama3.1:8b'  # Use the more reliable model  
         # Call Ollama for doctor notes
         doctor_result = subprocess.run([
             'curl', '-X', 'POST', 'http://localhost:11434/api/generate',
@@ -180,14 +210,24 @@ Format as JSON with keys: summary, keyPoints (array), nextSteps (array), medicat
             return jsonify({'error': 'Failed to generate notes with Ollama'}), 500
         
         # Parse Ollama responses
+        print("Doctor result stdout:", doctor_result.stdout[:500])  # First 500 chars
+        print("Patient result stdout:", patient_result.stdout[:500])
+        
         doctor_response = json.loads(doctor_result.stdout)
         patient_response = json.loads(patient_result.stdout)
+        
+        print("Doctor response content:", doctor_response.get('response', '')[:200])
+        print("Patient response content:", patient_response.get('response', '')[:200])
         
         # Extract generated text and parse JSON
         try:
             doctor_notes = json.loads(doctor_response['response'])
             patient_summary = json.loads(patient_response['response'])
-        except json.JSONDecodeError:
+            print("✅ Successfully parsed JSON from LLM responses")
+        except json.JSONDecodeError as json_error:
+            print(f"❌ JSON decode error: {json_error}")
+            print(f"Raw doctor response: {doctor_response.get('response', 'No response')}")
+            print(f"Raw patient response: {patient_response.get('response', 'No response')}")
             # Fallback if LLM doesn't return valid JSON
             doctor_notes = {
                 'subjective': 'Patient reports symptoms as transcribed',
