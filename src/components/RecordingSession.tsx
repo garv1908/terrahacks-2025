@@ -139,9 +139,12 @@ const RecordingSession: React.FC = () => {
         console.log('Transcribing audio...');
         const transcriptionResponse = await apiService.transcribeAudio(recorderState.audioBlob);
         transcription = transcriptionResponse.transcription;
+        console.log('Transcription:', transcription);
         
         console.log('Generating clinical notes...');
         const notesResponse = await apiService.generateNotes(transcription);
+        console.log('Doctor Notes:', notesResponse.doctorNotes);
+        console.log('Patient Summary:', notesResponse.patientSummary);
         doctorNotes = notesResponse.doctorNotes;
         patientSummary = notesResponse.patientSummary;
       } else {
@@ -205,13 +208,37 @@ Plan:
         consentGiven: true
       };
 
-      // Save recording
+      // Save recording to localStorage as backup
       const existingRecordings = JSON.parse(localStorage.getItem('echonotes-recordings') || '[]');
       existingRecordings.push(recording);
       localStorage.setItem('echonotes-recordings', JSON.stringify(existingRecordings));
 
-      // Navigate back to dashboard
-      navigate('/');
+      // Save to CSV database if backend is online
+      if (backendStatus === 'online') {
+        try {
+          // Prepare data for backend (without audioBlob which can't be serialized)
+          const recordingForBackend = {
+            id: recording.id,
+            patientName: recording.patientName,
+            doctorName: recording.doctorName,
+            date: recording.date.toISOString(),
+            duration: recording.duration,
+            transcription: recording.transcription,
+            doctorNotes: recording.doctorNotes,
+            patientSummary: recording.patientSummary,
+            status: recording.status
+          };
+          
+          console.log('Saving recording to database...');
+          await apiService.saveRecording(recordingForBackend);
+          console.log('Recording saved successfully to database');
+        } catch (saveError) {
+          console.error('Failed to save to database, but proceeding with local storage:', saveError);
+        }
+      }
+
+      // Navigate directly to summary page
+      navigate(`/summary/${sessionId}`);
       
     } catch (error) {
       console.error('Processing error:', error);

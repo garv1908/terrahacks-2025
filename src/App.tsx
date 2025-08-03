@@ -6,6 +6,7 @@ import DoctorDashboard from './components/DoctorDashboard';
 import PatientView from './components/PatientView';
 import RecordingSession from './components/RecordingSession';
 import ConsentForm from './components/ConsentForm';
+import SummaryPage from './components/SummaryPage';
 import type { UserRole } from './types';
 
 function App() {
@@ -139,6 +140,7 @@ function App() {
           } />
           <Route path="/consent" element={<ConsentForm />} />
           <Route path="/recording/:sessionId" element={<RecordingSession />} />
+          <Route path="/summary/:sessionId" element={<SummaryPage />} />
           <Route path="/patient/:sessionId" element={<PatientView />} />
           <Route path="/session/:sessionId" element={<PatientView />} />
           <Route path="*" element={<Navigate to="/" replace />} />

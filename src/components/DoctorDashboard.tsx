@@ -1,18 +1,83 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, FileText, Clock, User, Calendar } from 'lucide-react';
+import { Plus, FileText, Clock, User, Calendar, RefreshCw } from 'lucide-react';
+import { apiService } from '../services/api';
 import type { Recording } from '../types';
 
 const DoctorDashboard: React.FC = () => {
   const [recordings, setRecordings] = useState<Recording[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
 
   useEffect(() => {
-    // Load recordings from localStorage
-    const savedRecordings = localStorage.getItem('echonotes-recordings');
-    if (savedRecordings) {
-      setRecordings(JSON.parse(savedRecordings));
-    }
+    initializeDashboard();
   }, []);
+
+  const initializeDashboard = async () => {
+    // First check backend status
+    await checkBackendStatus();
+    // Then load recordings with the correct status
+    await loadRecordings();
+  };
+
+  const checkBackendStatus = async () => {
+    try {
+      await apiService.healthCheck();
+      setBackendStatus('online');
+      return true;
+    } catch (error) {
+      setBackendStatus('offline');
+      return false;
+    }
+  };
+
+  const loadRecordings = async () => {
+    try {
+      setLoading(true);
+      
+      // Try to load from backend first if it's online
+      try {
+        const response = await apiService.getAllRecordings();
+        if (response.status === 'success') {
+          // Convert backend format to frontend format
+          const backendRecordings = response.recordings.map((r: any) => ({
+            id: r.id,
+            patientName: r.patient_name,
+            doctorName: r.doctor_name,
+            date: new Date(r.date),
+            duration: parseInt(r.duration),
+            transcription: r.transcription,
+            doctorNotes: r.doctor_notes,
+            patientSummary: r.patient_summary,
+            status: r.status,
+            consentGiven: true
+          }));
+          setRecordings(backendRecordings);
+          return;
+        }
+      } catch (error) {
+        console.log('Backend not available, falling back to localStorage');
+      }
+      
+      // Fallback to localStorage
+      const savedRecordings = localStorage.getItem('echonotes-recordings');
+      if (savedRecordings) {
+        const localRecordings = JSON.parse(savedRecordings).map((r: any) => ({
+          ...r,
+          date: new Date(r.date)
+        }));
+        setRecordings(localRecordings);
+      }
+    } catch (error) {
+      console.error('Error loading recordings:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refreshRecordings = () => {
+    loadRecordings();
+  };
 
   const startNewSession = () => {
     window.location.href = '/consent';
@@ -210,7 +275,7 @@ const DoctorDashboard: React.FC = () => {
                         <motion.button
                           whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
-                          onClick={() => window.location.href = `/patient/${recording.id}`}
+                          onClick={() => window.location.href = `/summary/${recording.id}`}
                           className="text-blue-600 hover:text-blue-700 font-medium text-sm transition-colors duration-200"
                         >
                           View Details

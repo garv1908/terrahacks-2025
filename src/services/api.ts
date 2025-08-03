@@ -66,6 +66,26 @@ class ApiService {
     const response = await this.api.get('/health');
     return response.data;
   }
+
+  async saveRecording(recording: any): Promise<{ status: string; message: string }> {
+    const response = await this.api.post('/recordings', recording);
+    return response.data;
+  }
+
+  async getRecording(recordingId: string): Promise<{ status: string; recording: any }> {
+    const response = await this.api.get(`/recordings/${recordingId}`);
+    return response.data;
+  }
+
+  async getAllRecordings(): Promise<{ status: string; recordings: any[] }> {
+    const response = await this.api.get('/recordings');
+    return response.data;
+  }
+
+  async deleteRecording(recordingId: string): Promise<{ status: string; message: string }> {
+    const response = await this.api.delete(`/recordings/${recordingId}`);
+    return response.data;
+  }
 }
 
 export const apiService = new ApiService();

@@ -9,9 +9,13 @@ import whisper
 import librosa
 import soundfile as sf
 import numpy as np
+from database import CSVDatabase
 
 app = Flask(__name__)
 CORS(app, origins='*', allow_headers=['Content-Type', 'Authorization'], methods=['GET', 'POST', 'OPTIONS'])
+
+# Initialize CSV database
+db = CSVDatabase()
 
 # Load Whisper model once at startup
 print("Loading Whisper model...")
@@ -251,6 +255,59 @@ Provide a JSON response with the following structure. Return ONLY valid JSON, no
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/recordings', methods=['POST'])
+def save_recording():
+    """Save a recording to the CSV database"""
+    try:
+        data = request.json
+        success = db.save_recording(data)
+        
+        if success:
+            return jsonify({'status': 'success', 'message': 'Recording saved successfully'})
+        else:
+            return jsonify({'status': 'error', 'message': 'Failed to save recording'}), 500
+            
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/recordings/<recording_id>', methods=['GET'])
+def get_recording(recording_id):
+    """Get a specific recording by ID"""
+    try:
+        recording = db.get_recording(recording_id)
+        
+        if recording:
+            return jsonify({'status': 'success', 'recording': recording})
+        else:
+            return jsonify({'status': 'error', 'message': 'Recording not found'}), 404
+            
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/recordings', methods=['GET'])
+def get_all_recordings():
+    """Get all recordings from the database"""
+    try:
+        recordings = db.get_all_recordings()
+        return jsonify({'status': 'success', 'recordings': recordings})
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/recordings/<recording_id>', methods=['DELETE'])
+def delete_recording(recording_id):
+    """Delete a recording from the database"""
+    try:
+        success = db.delete_recording(recording_id)
+        
+        if success:
+            return jsonify({'status': 'success', 'message': 'Recording deleted successfully'})
+        else:
+            return jsonify({'status': 'error', 'message': 'Failed to delete recording'}), 500
+            
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
